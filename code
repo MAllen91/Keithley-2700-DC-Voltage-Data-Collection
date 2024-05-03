@@ -1,0 +1,82 @@
+#Keithley 2700 Data Logger
+#program connects to instruments, takes readings from each channel
+#every 10 minutes and writes to a CSV.
+#CSV should not be opened during scanning/writing events
+#User timer counts down the time remaining until next scanning/writing event
+
+import pyvisa
+import time
+import datetime
+import pandas
+import numpy
+import csv
+from itertools import chain
+
+#Keithley Discovery
+rm = pyvisa.ResourceManager()
+rm.list_resources()
+keithley = rm.open_resource('ASRL3::INSTR')
+print(keithley.query('*IDN?'))
+
+#instrument name
+print (keithley)
+
+#verify connection (read/write to instrument)
+keithley.read_termination = '\n'
+keithley.write_termination = '\n'
+keithley.query('*IDN?')
+
+#set baud rate
+keithley.baud_rate = 9600
+
+
+#keithley = rm.open_resource ("ASRL3::INSTR")
+keithley.write("*rst; status:preset; *cls")
+
+
+
+#Create CSV file to capture data, each time the program is closed and restarted, you must change the CSV file name here and in loop below
+# Header line
+with open("C:\\Users\\marsh\\Desktop\\MFC03.11.24.csv", "a") as csvfile:
+  csvwriter = csv.writer(csvfile)
+  csvwriter.writerow([*range(101, 141), *range(201, 221)])
+
+#read each channel on instrument and write to CSV
+while True:
+    voltageList = []
+    for x in chain(range(101, 141), range(201, 221)):
+        keithley.write(":ROUTe:CLOSe (@%d)" % x)
+        keithley.write("initiate:continuous OFF; :abort")
+        keithley.write(":sense:function 'voltage:DC'")
+        keithley.write(":sense:voltage:DC:range:auto on")
+        keithley.write(":trigger:source BUS")
+        keithley.write(":trigger:delay:auto ON")
+        keithley.write(":initiate")
+        keithley.write("*TRG")
+        voltageReading = keithley.query(":sense:data:fresh?")
+        voltageReading = voltageReading[1:].split('VDC')[0]
+        voltageList.append(voltageReading) # Append processed data to the temperature list
+        time.sleep(0.2)# Interval to wait between collecting data points.
+    with open("C:\\Users\\marsh\\Desktop\\MFC03.11.24.csv", "a", newline='') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(voltageList)
+ 	
+ 	#additional countdown timer for next scanning and writing event
+    # Calculate the total number of seconds
+    total_seconds = 600
+ 
+    # While loop that checks if total_seconds reaches zero
+    # If not zero, decrement total time by one second
+    while total_seconds > 0:
+ 
+        # Timer represents time left on countdown
+        timer = datetime.timedelta(seconds = total_seconds)
+       
+        # Prints the time left on the timer
+        print(timer, end="\r")
+ 
+        # Delays the program one second
+        time.sleep(1)
+ 
+        # Reduces total time by one second
+        total_seconds -= 1
